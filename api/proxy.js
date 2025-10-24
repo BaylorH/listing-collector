@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     console.error("Failed to parse body:", e);
   }
 
-  const targetUrl = `https://listing-collector.vercel.app/${endpoint}`;
+  const targetUrl = `http://127.0.0.1:3000/${endpoint}`;
 
   try {
     const response = await fetch(targetUrl, {
