@@ -3,9 +3,11 @@ import cors from "cors";
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" })); // allow big JSON payloads
 
 let listings = [];
+
+// ---- SESSION HANDLERS ----
 
 // Start new session
 app.post("/start", (req, res) => {
@@ -32,14 +34,52 @@ app.post("/end", (req, res) => {
   res.json({
     status: "ok",
     total: listings.length,
-    sample: listings.slice(0, 3),
+    sample: listings.slice(0, 3)
   });
   listings = [];
 });
 
-// Health check
-app.get("/", (req, res) => {
-  res.send("Listing collector API is live!");
+// ---- OPTIONAL PROXY ENDPOINT ----
+// lets you GET or POST from the Agent Builder via a single /api route
+app.all("/api", async (req, res) => {
+  const { endpoint, body } = req.query;
+
+  if (!endpoint) {
+    return res.status(400).json({ error: "Missing endpoint param" });
+  }
+
+  // allow body to be passed as query string or POST body
+  let parsedBody = {};
+  try {
+    parsedBody =
+      typeof body === "string"
+        ? JSON.parse(decodeURIComponent(body))
+        : req.body || {};
+  } catch (e) {
+    console.error("Body parse failed:", e.message);
+  }
+
+  const targetUrl = `https://listing-collector.vercel.app/${endpoint}`;
+  try {
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: endpoint === "data" ? JSON.stringify(parsedBody) : null
+    });
+    const data = await response.json();
+    return res.status(200).json(data);
+  } catch (err) {
+    console.error("Proxy error:", err);
+    res.status(500).json({ error: "Proxy failed" });
+  }
 });
+
+// ---- HEALTH CHECK ----
+app.get("/", (req, res) => {
+  res.send("Listing collector + proxy is live!");
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
 
 export default app;
